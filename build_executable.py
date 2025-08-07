@@ -41,6 +41,16 @@ def build_executable():
         "--icon=NONE",                  # No icon (can be added later)
         "--add-data=.env.example;.",    # Include example env file
         "--add-data=requirements.txt;.", # Include requirements
+        "--add-binary=C:\\Users\\jaime\\anaconda3\\envs\\QWAK2\\Library\\bin\\tk86t.dll;.", # Include tk DLL
+        "--add-binary=C:\\Users\\jaime\\anaconda3\\envs\\QWAK2\\Library\\bin\\tcl86t.dll;.", # Include tcl DLL
+        "--hidden-import=tkinter",      # Ensure tkinter is included
+        "--hidden-import=tkinter.ttk",  # Include tkinter.ttk
+        "--hidden-import=tkinter.messagebox", # Include message boxes
+        "--hidden-import=tkinter.filedialog", # Include file dialogs
+        "--hidden-import=paramiko",     # Ensure paramiko is included
+        "--hidden-import=dotenv",       # Ensure python-dotenv is included
+        "--collect-all=tkinter",        # Collect all tkinter modules
+        "--collect-binaries=tkinter",   # Include tkinter DLLs
         "--clean",                      # Clean PyInstaller cache
         "--noconfirm",                  # Overwrite output without asking
         "remote_server_gui.py"          # Main script
