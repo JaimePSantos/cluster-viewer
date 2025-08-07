@@ -21,8 +21,12 @@ tags
 # Persistent undo
 [._]*.un~
 
-/*/.ipynb_checkpoints
+# Build artifacts and executables
 build/*
+dist/
+*.spec
+
+# Python cache and metadata
 .idea/
 .ipynb_checkpoints/
 /*/qwak.egg-info
