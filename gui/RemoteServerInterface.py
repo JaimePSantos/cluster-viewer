@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Main GUI application for Remote Server Log Manager
+Main GUI application for Remote Server Manager
 
-Modular version with separated concerns and clean architecture.
+Modular version with tabbed interface for logs and process management.
 """
 
 import tkinter as tk
@@ -16,21 +16,22 @@ from core.config import Config
 from core.ssh_manager import SSHManager
 from core.log_analyzer import LogAnalyzer
 from .file_selector import LogFileSelector
+from .PIDTrackingInterface import PIDTrackingInterface
 
 
 class RemoteServerInterface:
-    """Main GUI application class"""
+    """Main GUI application class with tabbed interface"""
     
-    def __init__(self, root, title="Remote Server Log Manager"):
+    def __init__(self, root, title="Remote Server Manager"):
         """Initialize the GUI application"""
         self.root = root
         self.root.title(title)
-        self.root.geometry(Config.WINDOW_GEOMETRY)
+        self.root.geometry("1000x700")  # Larger window for tabbed interface
         
         # Queue for thread communication
         self.message_queue = queue.Queue()
         
-        # Initialize managers
+        # Initialize managers for log functionality
         self.ssh_manager = SSHManager(
             message_callback=self.log_message,
             status_callback=self.update_status
@@ -46,27 +47,61 @@ class RemoteServerInterface:
         self.process_queue()
     
     def setup_ui(self):
-        """Setup the user interface"""
-        # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        """Setup the user interface with tabs"""
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self.root, padding="10")
+        self.notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Configure grid weights
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(5, weight=1)
+        # Create tabs
+        self.setup_log_manager_tab()
+        self.setup_pid_tracker_tab()
         
-        # Setup individual sections
-        self._setup_title(main_frame)
-        self._setup_connection_settings(main_frame)
-        self._setup_action_buttons(main_frame)
-        self._setup_progress_and_status(main_frame)
-        self._setup_output_area(main_frame)
+        # Setup status bar
+        self.setup_status_bar()
     
-    def _setup_title(self, parent):
-        """Setup the title section"""
-        title_label = ttk.Label(parent, text=Config.WINDOW_TITLE, 
+    def setup_log_manager_tab(self):
+        """Setup the log manager tab"""
+        # Create frame for log manager
+        log_frame = ttk.Frame(self.notebook)
+        self.notebook.add(log_frame, text="📄 Log Manager")
+        
+        # Configure grid weights for log frame
+        log_frame.columnconfigure(1, weight=1)
+        log_frame.rowconfigure(4, weight=1)
+        
+        # Setup log manager sections
+        self._setup_log_title(log_frame)
+        self._setup_connection_settings(log_frame)
+        self._setup_action_buttons(log_frame)
+        self._setup_progress_bar(log_frame)
+        self._setup_log_output_area(log_frame)
+    
+    def setup_pid_tracker_tab(self):
+        """Setup the PID tracker tab"""
+        # Create frame for PID tracker
+        pid_frame = ttk.Frame(self.notebook)
+        self.notebook.add(pid_frame, text="⚙️ Process Manager")
+        
+        # Initialize PID tracking interface
+        self.pid_interface = PIDTrackingInterface(pid_frame, self.message_queue)
+    
+    def setup_status_bar(self):
+        """Setup the status bar at the bottom"""
+        status_frame = ttk.Frame(self.root)
+        status_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=(0, 10))
+        
+        # Status label
+        self.status_var = tk.StringVar(value="Ready")
+        self.status_label = ttk.Label(status_frame, textvariable=self.status_var)
+        self.status_label.pack(side=tk.LEFT)
+        
+        # Progress bar (shared between tabs)
+        self.progress = ttk.Progressbar(status_frame, mode='indeterminate', length=200)
+        self.progress.pack(side=tk.RIGHT)
+    
+    def _setup_log_title(self, parent):
+        """Setup the title section for log manager"""
+        title_label = ttk.Label(parent, text="Remote Server Log Manager", 
                                font=Config.FONT_TITLE)
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
     
@@ -125,30 +160,28 @@ class RemoteServerInterface:
         self.analyze_btn.pack(side=tk.LEFT, padx=(0, 10))
         
         # Clear output button
-        self.clear_btn = ttk.Button(button_frame, text="Clear Output", 
+        self.clear_btn = ttk.Button(button_frame, text="Clear Log Output", 
                                    command=self.clear_output)
         self.clear_btn.pack(side=tk.LEFT)
     
-    def _setup_progress_and_status(self, parent):
-        """Setup progress bar and status label"""
-        # Progress bar
-        self.progress = ttk.Progressbar(parent, mode='indeterminate')
-        self.progress.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        
-        # Status label
-        self.status_var = tk.StringVar(value="Ready")
-        self.status_label = ttk.Label(parent, textvariable=self.status_var)
-        self.status_label.grid(row=4, column=0, columnspan=3, sticky=tk.W)
+    def _setup_progress_bar(self, parent):
+        """Setup progress bar for log manager"""
+        # Note: Progress bar is now in the status bar at the bottom
+        pass
     
-    def _setup_output_area(self, parent):
-        """Setup the output text area"""
-        output_frame = ttk.LabelFrame(parent, text="Output", padding="5")
-        output_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+    def _setup_log_output_area(self, parent):
+        """Setup the output text area for log manager"""
+        output_frame = ttk.LabelFrame(parent, text="Log Output", padding="5")
+        output_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
         output_frame.columnconfigure(0, weight=1)
         output_frame.rowconfigure(0, weight=1)
         
         self.output_text = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, height=15)
         self.output_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Clear button
+        clear_btn = ttk.Button(output_frame, text="Clear Output", command=self.clear_output)
+        clear_btn.grid(row=1, column=0, sticky=tk.E, pady=(5, 0))
     
     def browse_local_path(self):
         """Browse for local download directory"""
@@ -193,6 +226,18 @@ class RemoteServerInterface:
                 elif msg_type == "disable_buttons":
                     self.download_btn.config(state=tk.DISABLED)
                     self.analyze_btn.config(state=tk.DISABLED)
+                elif msg_type == "ssh_connected":
+                    # Handle SSH connection for PID tracker
+                    if hasattr(self, 'pid_interface'):
+                        self.pid_interface.set_connected_state(True)
+                elif msg_type == "ssh_disconnected":
+                    # Handle SSH disconnection for PID tracker
+                    if hasattr(self, 'pid_interface'):
+                        self.pid_interface.set_connected_state(False)
+                elif msg_type == "update_process_list":
+                    # Update process list in PID tracker
+                    if hasattr(self, 'pid_interface'):
+                        self.pid_interface.update_process_list(message)
                     
         except queue.Empty:
             pass
@@ -201,7 +246,7 @@ class RemoteServerInterface:
         self.root.after(Config.QUEUE_CHECK_INTERVAL, self.process_queue)
     
     def clear_output(self):
-        """Clear the output text area"""
+        """Clear the log output text area"""
         self.output_text.delete(1.0, tk.END)
     
     def download_logs(self):
@@ -320,11 +365,20 @@ def main():
     elif 'alt' in available_themes:
         style.theme_use('alt')
     
+    # Configure custom styles
+    style.configure('Accent.TButton', foreground='white')
+    
     # Create and run the application
-    app = RemoteServerInterface(root)
+    app = RemoteServerInterface(root, "Remote Server Manager")
     
     # Handle window closing
     def on_closing():
+        # Close any active connections
+        if hasattr(app, 'ssh_manager'):
+            app.ssh_manager.close()
+        if hasattr(app, 'pid_interface') and hasattr(app.pid_interface, 'pid_manager'):
+            app.pid_interface.pid_manager.close()
+        
         root.quit()
         root.destroy()
     

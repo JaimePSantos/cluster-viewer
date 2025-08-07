@@ -1,7 +1,24 @@
-# CHANGELOG - Remote Server Log Manager
+# CHANGELOG - Remote Server Manager
 
 ## 📋 **PROJECT OVERVIEW**
-Standalone GUI application for managing remote server log files with download and analysis capabilities. Spin-off project from the SQW (Staggered Quantum Walk) research toolkit.
+Tabbed GUI application for remote server management with log analysis and SSH process tracking capabilities. Spin-off project from the SQW (Staggered Quantum Walk) research toolkit.
+
+---
+
+## [Latest Session] August 8, 2025 - SSH Process Management & Tabbed Interface
+
+### 🚀 **Major Feature: SSH Process Tracking & Management**
+- **Tabbed Interface**: Redesigned application with two tabs - "📄 Log Manager" (existing) and "⚙️ Process Manager" (new)
+- **SSH Process Manager**: Complete remote process monitoring via SSH without SFTP dependency
+- **Real-time Monitoring**: Live process listing, CPU/memory usage tracking, and process lifecycle management
+- **Process Control**: Kill processes, monitor specific PIDs, and view detailed process information
+- **System Statistics**: Load average, memory usage, disk usage, and process count display
+
+### 🔧 **Technical Implementation**
+- **New Module**: `core/pid_manager.py` - SSH-based process management (300+ lines)
+- **New Interface**: `gui/PIDTrackingInterface.py` - Complete GUI for process tracking (400+ lines)
+- **Enhanced Architecture**: Message queue communication between tabs for seamless integration
+- **Improved UX**: Shared status bar, progress indicators, and connection state management across tabs
 
 ---
 
