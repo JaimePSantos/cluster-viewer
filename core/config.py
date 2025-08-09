@@ -20,6 +20,10 @@ class Config:
     DEFAULT_REMOTE_PATH = "Documents/sqw/logs/"
     DEFAULT_LOCAL_PATH = "./logs"
     
+    # Default subhost settings
+    DEFAULT_SUBHOST_HOSTNAME = "192.168.30.nn"
+    DEFAULT_SUBHOST_USERNAME = ""
+    
     # UI settings
     WINDOW_TITLE = "Remote Server Log Manager"
     WINDOW_GEOMETRY = "800x600"
@@ -59,3 +63,18 @@ class Config:
     def get_password(cls):
         """Get password from environment"""
         return os.getenv('SFTP_PASSWORD')
+    
+    @classmethod
+    def get_subhost_hostname(cls):
+        """Get subhost hostname from environment or default"""
+        return os.getenv('SUBHOST_HOSTNAME', cls.DEFAULT_SUBHOST_HOSTNAME)
+    
+    @classmethod
+    def get_subhost_username(cls):
+        """Get subhost username from environment or default"""
+        return os.getenv('SUBHOST_USERNAME', cls.DEFAULT_SUBHOST_USERNAME)
+    
+    @classmethod
+    def get_subhost_password(cls):
+        """Get subhost password from environment (defaults to main password)"""
+        return os.getenv('SUBHOST_PASSWORD', cls.get_password())

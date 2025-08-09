@@ -5,7 +5,30 @@ Tabbed GUI application for remote server management with log analysis and SSH pr
 
 ---
 
-## [Latest Session] August 8, 2025 - SSH Process Management & Tabbed Interface
+## [Latest Session] August 9, 2025 - Subhost Connection Feature (SSH Hop)
+
+### 🚀 **Major Feature: Subhost SSH Connection**
+- **SSH Hop Implementation**: Added ability to connect to subhosts via main SSH connection
+- **UI Integration**: Added subhost connection section to SSH Process Manager tab
+- **Connection Flow**: Subhost connection only available after main host connection established
+- **Password Management**: Separate password prompt for subhost, stored securely during session
+- **Command Execution**: Framework for executing commands on subhost via SSH tunneling
+
+### 🔧 **Technical Changes**
+- **Modified**: `gui/PIDTrackingInterface.py` - Added subhost connection UI and logic
+- **Enhanced**: Connection state management for both main host and subhost
+- **Added**: `execute_subhost_command()` method for SSH hop command execution
+- **Updated**: Button state management based on connection hierarchy
+- **Config**: Extended configuration support for subhost hostname defaults
+
+### ⚠️ **Status: In Development**
+- Core SSH hop functionality implemented but requires debugging
+- sshpass dependency and interactive SSH authentication needs refinement
+- Full subhost process management integration pending
+
+---
+
+## [Previous Session] August 8, 2025 - SSH Process Management & Tabbed Interface
 
 ### 🚀 **Major Feature: SSH Process Tracking & Management**
 - **Tabbed Interface**: Redesigned application with two tabs - "📄 Log Manager" (existing) and "⚙️ Process Manager" (new)

@@ -29,6 +29,9 @@ class PIDTrackingInterface:
             status_callback=self.update_status
         )
         
+        # Connection states
+        self.subhost_connected = False
+        
         # Monitoring state
         self.monitoring_threads = {}
         self.auto_refresh = False
@@ -68,6 +71,9 @@ class PIDTrackingInterface:
         
         # Connection fields
         self._setup_connection_fields(conn_frame)
+        
+        # Subhost settings
+        self._setup_subhost_settings(conn_frame)
     
     def _setup_connection_fields(self, parent):
         """Setup individual connection fields"""
@@ -90,6 +96,39 @@ class PIDTrackingInterface:
         self.disconnect_btn = ttk.Button(parent, text="Disconnect", 
                                         command=self.disconnect_ssh, state=tk.DISABLED)
         self.disconnect_btn.grid(row=0, column=5, padx=(5, 0))
+    
+    def _setup_subhost_settings(self, parent):
+        """Setup the subhost connection settings"""
+        # Separator
+        ttk.Separator(parent, orient='horizontal').grid(row=1, column=0, columnspan=6, sticky=(tk.W, tk.E), pady=(10, 10))
+        
+        # Subhost section label
+        subhost_label = ttk.Label(parent, text="Subhost Connection (via main host)", font=("Arial", 10, "bold"))
+        subhost_label.grid(row=2, column=0, columnspan=6, sticky=tk.W, pady=(0, 5))
+        
+        # Subhost hostname row
+        ttk.Label(parent, text="Subhost:").grid(row=3, column=0, sticky=tk.W, padx=(0, 5))
+        self.subhost_hostname_var = tk.StringVar(value=Config.get_subhost_hostname())
+        self.subhost_hostname_entry = ttk.Entry(parent, textvariable=self.subhost_hostname_var, width=15)
+        self.subhost_hostname_entry.grid(row=3, column=1, sticky=tk.W, padx=(0, 10))
+        
+        # Note about connection
+        note_label = ttk.Label(parent, text="(Connect to main host first)", font=("Arial", 8), foreground="gray")
+        note_label.grid(row=3, column=2, sticky=tk.W, padx=(0, 10))
+        
+        # Test subhost button
+        self.test_subhost_btn = ttk.Button(parent, text="Test Subhost", 
+                                         command=self.test_subhost, state=tk.DISABLED)
+        self.test_subhost_btn.grid(row=3, column=3, padx=(5, 5))
+        
+        # Subhost connect/disconnect buttons
+        self.subhost_connect_btn = ttk.Button(parent, text="Connect to Subhost", 
+                                            command=self.connect_subhost, state=tk.DISABLED)
+        self.subhost_connect_btn.grid(row=3, column=4, padx=(10, 5))
+        
+        self.subhost_disconnect_btn = ttk.Button(parent, text="Disconnect", 
+                                               command=self.disconnect_subhost, state=tk.DISABLED)
+        self.subhost_disconnect_btn.grid(row=3, column=5, padx=(5, 0))
     
     def _setup_process_controls(self, parent):
         """Setup process control buttons and options"""
@@ -235,6 +274,168 @@ class PIDTrackingInterface:
         self.pid_manager.close()
         self.message_queue.put(("ssh_disconnected", None))
         self.log_message("Disconnected from SSH server")
+    
+    def connect_subhost(self):
+        """Connect to subhost via SSH command through main host"""
+        if not self.pid_manager.connected:
+            self.log_message("❌ Please connect to main host first")
+            return
+            
+        thread = threading.Thread(target=self._connect_subhost_worker, daemon=True)
+        thread.start()
+    
+    def _connect_subhost_worker(self):
+        """Worker function for subhost SSH connection"""
+        try:
+            hostname = self.subhost_hostname_var.get()
+            
+            if not hostname:
+                self.log_message("❌ Please enter subhost hostname")
+                return
+            
+            # Get password for subhost
+            password = simpledialog.askstring("Subhost Password", 
+                                            f"Enter password for subhost {hostname}:", 
+                                            show='*')
+            if not password:
+                self.log_message("Password input cancelled.")
+                return
+            
+            # Test SSH connection to subhost through main host
+            self.log_message(f"🔄 Testing connection to subhost {hostname}...")
+            self.update_status(f"Connecting to subhost {hostname}...")
+            
+            # First, check if sshpass is available
+            try:
+                stdin, stdout, stderr = self.pid_manager.ssh.exec_command("which sshpass")
+                sshpass_available = bool(stdout.read().decode().strip())
+            except:
+                sshpass_available = False
+                self.log_message("⚠️ Could not check for sshpass availability")
+            
+            if sshpass_available:
+                # Use sshpass if available
+                test_cmd = f"sshpass -p '{password}' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 {hostname} 'echo \"Connection successful\" && hostname'"
+            else:
+                # Use expect-like approach or simple SSH test
+                test_cmd = f"timeout 10 ssh -o StrictHostKeyChecking=no -o BatchMode=no {hostname} 'echo \"Connection successful\" && hostname'"
+                self.log_message("⚠️ sshpass not available, using interactive SSH (may require manual password entry)")
+            
+            stdin, stdout, stderr = self.pid_manager.ssh.exec_command(test_cmd)
+            
+            if not sshpass_available:
+                # For interactive SSH, send password to stdin
+                stdin.write(f"{password}\n")
+                stdin.flush()
+            
+            output = stdout.read().decode().strip()
+            error = stderr.read().decode().strip()
+            
+            if "Connection successful" in output or "Connection refused" not in error:
+                self.subhost_connected = True
+                self.subhost_password = password  # Store password for subsequent commands
+                self.subhost_hostname = hostname  # Store hostname
+                subhost_hostname = output.split('\n')[-1] if '\n' in output else hostname
+                self.log_message(f"✅ Connected to subhost: {subhost_hostname}")
+                self.update_status(f"Connected to subhost: {subhost_hostname}")
+                self.message_queue.put(("subhost_connected", None))
+            else:
+                self.log_message(f"❌ Failed to connect to subhost: {hostname}")
+                if error:
+                    self.log_message(f"Error: {error}")
+                self.update_status("Subhost connection failed")
+            
+        except Exception as e:
+            self.log_message(f"❌ Subhost connection error: {str(e)}")
+            self.update_status("Subhost connection error")
+    
+    def disconnect_subhost(self):
+        """Disconnect from subhost"""
+        try:
+            if hasattr(self, 'subhost_password'):
+                delattr(self, 'subhost_password')
+            if hasattr(self, 'subhost_hostname'):
+                delattr(self, 'subhost_hostname')
+            self.subhost_connected = False
+            self.log_message("🔌 Disconnected from subhost")
+            self.update_status("Subhost disconnected")
+            self.message_queue.put(("subhost_disconnected", None))
+        except Exception as e:
+            self.log_message(f"❌ Error disconnecting from subhost: {str(e)}")
+            self.update_status("Subhost disconnect error")
+    
+    def execute_subhost_command(self, command):
+        """Execute a command on the subhost via SSH hop"""
+        if not self.subhost_connected or not hasattr(self, 'subhost_password') or not hasattr(self, 'subhost_hostname'):
+            self.log_message("❌ Not connected to subhost")
+            return None, "Not connected to subhost"
+        
+        try:
+            # Check if sshpass is available
+            try:
+                stdin, stdout, stderr = self.pid_manager.ssh.exec_command("which sshpass")
+                sshpass_available = bool(stdout.read().decode().strip())
+            except:
+                sshpass_available = False
+            
+            if sshpass_available:
+                # Use sshpass for automatic password authentication
+                ssh_cmd = f"sshpass -p '{self.subhost_password}' ssh -o StrictHostKeyChecking=no {self.subhost_hostname} '{command}'"
+            else:
+                # Fallback to regular SSH (may not work for complex commands)
+                ssh_cmd = f"ssh -o StrictHostKeyChecking=no {self.subhost_hostname} '{command}'"
+                self.log_message("⚠️ sshpass not available, SSH may require manual authentication")
+            
+            stdin, stdout, stderr = self.pid_manager.ssh.exec_command(ssh_cmd)
+            
+            if not sshpass_available:
+                # For interactive SSH, send password to stdin
+                stdin.write(f"{self.subhost_password}\n")
+                stdin.flush()
+            
+            output = stdout.read().decode().strip()
+            error = stderr.read().decode().strip()
+            
+            return output, error
+            
+        except Exception as e:
+            error_msg = f"Error executing subhost command: {str(e)}"
+            self.log_message(f"❌ {error_msg}")
+            return None, error_msg
+    
+    def test_subhost(self):
+        """Test subhost connection with a simple command"""
+        if not self.subhost_connected:
+            self.log_message("❌ Not connected to subhost")
+            return
+            
+        thread = threading.Thread(target=self._test_subhost_worker, daemon=True)
+        thread.start()
+    
+    def _test_subhost_worker(self):
+        """Worker function to test subhost with basic commands"""
+        try:
+            self.log_message("🔄 Testing subhost connection...")
+            
+            # Test basic commands
+            commands = [
+                ("hostname", "Hostname"),
+                ("whoami", "Current User"), 
+                ("uptime", "Uptime"),
+                ("pwd", "Working Directory")
+            ]
+            
+            for cmd, description in commands:
+                output, error = self.execute_subhost_command(cmd)
+                if output:
+                    self.log_message(f"📋 {description}: {output}")
+                elif error:
+                    self.log_message(f"❌ {description} error: {error}")
+                    
+            self.log_message("✅ Subhost test completed")
+            
+        except Exception as e:
+            self.log_message(f"❌ Subhost test error: {str(e)}")
     
     def list_processes(self):
         """List running processes"""
@@ -397,6 +598,8 @@ class PIDTrackingInterface:
             self.system_stats_btn.config(state=tk.NORMAL)
             self.kill_process_btn.config(state=tk.NORMAL)
             self.monitor_btn.config(state=tk.NORMAL)
+            # Enable subhost connection when main host is connected
+            self.subhost_connect_btn.config(state=tk.NORMAL)
         else:
             self.connect_btn.config(state=tk.NORMAL)
             self.disconnect_btn.config(state=tk.DISABLED)
@@ -404,6 +607,10 @@ class PIDTrackingInterface:
             self.system_stats_btn.config(state=tk.DISABLED)
             self.kill_process_btn.config(state=tk.DISABLED)
             self.monitor_btn.config(state=tk.DISABLED)
+            # Disable subhost connection when main host is disconnected
+            self.subhost_connect_btn.config(state=tk.DISABLED)
+            if self.subhost_connected:
+                self.disconnect_subhost()
             
             # Stop auto-refresh
             self.auto_refresh = False
@@ -412,3 +619,14 @@ class PIDTrackingInterface:
             # Clear process list
             for item in self.process_tree.get_children():
                 self.process_tree.delete(item)
+    
+    def set_subhost_connected_state(self, connected):
+        """Update subhost UI based on connection state"""
+        if connected:
+            self.subhost_connect_btn.config(state=tk.DISABLED)
+            self.subhost_disconnect_btn.config(state=tk.NORMAL)
+            self.test_subhost_btn.config(state=tk.NORMAL)
+        else:
+            self.subhost_connect_btn.config(state=tk.NORMAL if self.pid_manager.connected else tk.DISABLED)
+            self.subhost_disconnect_btn.config(state=tk.DISABLED)
+            self.test_subhost_btn.config(state=tk.DISABLED)

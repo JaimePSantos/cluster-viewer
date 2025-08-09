@@ -238,6 +238,14 @@ class RemoteServerInterface:
                     # Update process list in PID tracker
                     if hasattr(self, 'pid_interface'):
                         self.pid_interface.update_process_list(message)
+                elif msg_type == "subhost_connected":
+                    # Handle subhost connection for PID tracker
+                    if hasattr(self, 'pid_interface'):
+                        self.pid_interface.set_subhost_connected_state(True)
+                elif msg_type == "subhost_disconnected":
+                    # Handle subhost disconnection for PID tracker
+                    if hasattr(self, 'pid_interface'):
+                        self.pid_interface.set_subhost_connected_state(False)
                     
         except queue.Empty:
             pass
